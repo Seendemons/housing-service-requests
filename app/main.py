@@ -4,7 +4,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-app = FastAPI(title="Заявки в жилищную службу")
+from app.config import Settings
+
+settings = Settings()
+app = FastAPI(title=settings.app_name, debug=settings.app_debug)
 
 # Путь считается от этого файла, а не от папки запуска команды.
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")

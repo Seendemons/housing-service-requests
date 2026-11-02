@@ -1,9 +1,14 @@
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.config import Settings
 
 
-def test_home_page():
+def test_home_page(monkeypatch):
+    monkeypatch.delenv("APP_NAME", raising=False)
+    monkeypatch.delenv("APP_DEBUG", raising=False)
+    monkeypatch.setattr("app.config.Settings", lambda: Settings(_env_file=None))
+    from app.main import app
+
     with TestClient(app) as client:
         response = client.get("/")
 
