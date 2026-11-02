@@ -59,6 +59,58 @@ cp -n .env.example .env
 а `.env.example` хранится в репозитории только как шаблон и сам не загружается.
 Команда запуска остаётся прежней.
 
+## PostgreSQL через Docker Compose
+
+Подготовлена конфигурация PostgreSQL 17; приложение пока не подключено к БД.
+Для будущего запуска нужны установленный Docker с работающим Docker Engine
+и Docker Compose v2 (`docker compose`). Установка и запуск БД ещё не проверены.
+
+Из корня проекта создайте `.env` без перезаписи существующего файла:
+
+```bash
+cp -n .env.example .env
+```
+
+Если `.env` уже существует, вручную добавьте в него недостающие `POSTGRES_DB`,
+`POSTGRES_USER`, `POSTGRES_PASSWORD` и `POSTGRES_PORT` из `.env.example`,
+сохранив свои настройки приложения. Замените вымышленный пример пароля своим
+непустым паролем перед запуском. Переменные окружения имеют приоритет над `.env`.
+
+После установки Docker проверьте конфигурацию без вывода значений и секретов:
+
+```bash
+docker compose config --quiet
+```
+
+Для будущего запуска и проверки состояния:
+
+```bash
+docker compose up -d db
+docker compose ps
+```
+
+После инициализации ожидается состояние `healthy` у сервиса `db`.
+При подключении приложения с этого компьютера используйте хост `127.0.0.1`,
+порт из `POSTGRES_PORT` (по умолчанию `5432`), имя БД из `POSTGRES_DB`,
+пользователя из `POSTGRES_USER` и пароль из `POSTGRES_PASSWORD`.
+В шаблоне имя БД — `housing_requests`, пользователь — `housing_user`.
+Порт БД доступен только на локальном интерфейсе компьютера.
+
+Для остановки:
+
+```bash
+docker compose down
+```
+
+Именованный том `postgres_data` сохраняет данные после `docker compose down`.
+Переменные `POSTGRES_DB`, `POSTGRES_USER` и `POSTGRES_PASSWORD` применяются при
+первой инициализации пустого тома. Изменение `.env` не меняет автоматически
+пароль, пользователя или имя уже созданной БД.
+
+Справка: [официальный образ PostgreSQL](https://hub.docker.com/_/postgres),
+[проверка конфигурации Compose](https://docs.docker.com/reference/cli/docker/compose/config/)
+и [остановка Compose](https://docs.docker.com/reference/cli/docker/compose/down/).
+
 ## Структура
 
 ```text
