@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +23,9 @@ from app.models import Role, User
 
 settings = Settings()
 app = FastAPI(title=settings.app_name, debug=settings.app_debug)
+app.mount(
+    "/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static"
+)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 DB = Annotated[Session, Depends(get_db)]
 

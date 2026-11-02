@@ -1,14 +1,57 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Вход</title></head>
-<body><main>
-<h1>Вход</h1>
-{% if error %}<p role="alert">{{ error }}</p>{% endif %}
-<form method="post" action="/login">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <p><label>Логин <input name="login" autocomplete="username" required></label></p>
-    <p><label>Пароль <input type="password" name="password" autocomplete="current-password" required></label></p>
-    <button type="submit">Войти</button>
-</form>
-<p><a href="/">На главную</a></p>
-</main></body></html>
+{% extends "base.html" %}
+
+{% block title %}Вход — Жилищная служба{% endblock %}
+
+{% block content %}
+<div class="login-page">
+    <header class="site-header">
+        <div class="brand">
+            <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none">
+                    <path d="M5 14 16 5l11 9v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V14Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M13 27V17h6v10M22 7V4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </span>
+            <span>Жилищная служба</span>
+        </div>
+        <span class="site-caption">Один дом — общее дело</span>
+    </header>
+
+    <main class="login-layout">
+        <section class="welcome" aria-labelledby="welcome-heading">
+            <p class="eyebrow">Личный кабинет</p>
+            <h2 id="welcome-heading">Добро <br>пожаловать<br><span>домой.</span></h2>
+            <p class="welcome-description">Вход для жителей и диспетчера<br class="desktop-break"> жилищной службы.</p>
+            <div class="welcome-detail" aria-hidden="true"></div>
+        </section>
+
+        <section class="login-card" aria-labelledby="login-heading">
+            <div class="form-heading">
+                <h1 id="login-heading">Вход в аккаунт</h1>
+                <p>Введите свой логин и пароль.</p>
+            </div>
+
+            {% if error %}
+            <p class="form-error" id="login-error" role="alert">{{ error }}</p>
+            {% endif %}
+
+            <form method="post" action="/login" class="login-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <div class="form-field">
+                    <label for="login">Логин</label>
+                    <input id="login" name="login" autocomplete="username" autocapitalize="none" spellcheck="false" required{% if error %} aria-invalid="true" aria-describedby="login-error"{% endif %}>
+                </div>
+                <div class="form-field">
+                    <label for="password">Пароль</label>
+                    <input id="password" type="password" name="password" autocomplete="current-password" required{% if error %} aria-invalid="true" aria-describedby="login-error"{% endif %}>
+                </div>
+                <button type="submit" class="button-primary">Войти <span aria-hidden="true">→</span></button>
+            </form>
+
+            <a class="back-link" href="/"><span aria-hidden="true">←</span> На главную</a>
+        </section>
+    </main>
+
+    <footer class="site-footer">Заявки в жилищную службу</footer>
+</div>
+{% endblock %}

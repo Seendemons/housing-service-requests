@@ -1,0 +1,360 @@
+:root {
+    color-scheme: light;
+    --color-text: #182e45;
+    --color-muted: #64748b;
+    --color-blue: #2458d3;
+    --color-blue-hover: #1947b3;
+    --color-border: #d7dfe9;
+    --color-error: #9d2934;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--color-text);
+    background: #fff;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-width: 280px;
+    line-height: 1.5;
+}
+
+a {
+    color: var(--color-blue);
+    text-underline-offset: 4px;
+}
+
+button,
+input {
+    font: inherit;
+}
+
+:focus-visible {
+    outline: 3px solid var(--color-blue);
+    outline-offset: 4px;
+}
+
+.login-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100svh;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 40px 64px 24px;
+}
+
+.site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.35px;
+}
+
+.brand-mark {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 13px;
+    background: #edf3ff;
+    color: var(--color-blue);
+}
+
+.brand-mark svg {
+    width: 28px;
+    height: 28px;
+}
+
+.site-caption,
+.site-footer {
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+.login-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
+    align-items: center;
+    gap: 64px;
+    flex: 1;
+    padding: 72px 0 88px;
+}
+
+.eyebrow {
+    margin: 0 0 24px;
+    color: var(--color-blue);
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+.welcome h2 {
+    margin: 0;
+    font-size: clamp(42px, 4.8vw, 64px);
+    font-weight: 600;
+    letter-spacing: -2.6px;
+    line-height: 1.08;
+}
+
+.welcome h2 span {
+    color: var(--color-blue);
+}
+
+.welcome-description {
+    margin: 28px 0 0;
+    color: var(--color-muted);
+    font-size: 17px;
+    line-height: 1.7;
+}
+
+.welcome-detail {
+    width: 40px;
+    height: 3px;
+    margin-top: 48px;
+    border-radius: 4px;
+    background: var(--color-blue);
+}
+
+.login-card {
+    padding: 40px;
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: 0 16px 48px -28px rgb(24 46 69 / 24%);
+}
+
+.form-heading h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 650;
+    letter-spacing: -0.8px;
+    line-height: 1.25;
+}
+
+.form-heading p {
+    margin: 10px 0 0;
+    color: var(--color-muted);
+    font-size: 14px;
+}
+
+.login-form {
+    display: grid;
+    gap: 22px;
+    margin-top: 32px;
+}
+
+.form-field {
+    display: grid;
+    gap: 8px;
+}
+
+.form-field label {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.form-field input {
+    width: 100%;
+    min-width: 0;
+    min-height: 50px;
+    padding: 12px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--color-text);
+    font-size: 16px;
+}
+
+.form-field input:hover {
+    border-color: #9caec6;
+}
+
+.form-field input:focus-visible {
+    border-color: var(--color-blue);
+    outline-width: 2px;
+    outline-offset: 2px;
+}
+
+.form-field input[aria-invalid="true"] {
+    border-color: var(--color-error);
+}
+
+.form-error {
+    margin: 24px 0 0;
+    padding: 12px 14px;
+    border-left: 3px solid var(--color-error);
+    border-radius: 4px 8px 8px 4px;
+    background: #fff2f3;
+    color: var(--color-error);
+    font-size: 14px;
+}
+
+.form-error + .login-form {
+    margin-top: 24px;
+}
+
+.button-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 52px;
+    margin-top: 6px;
+    padding: 12px 20px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--color-blue);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.button-primary:hover {
+    background: var(--color-blue-hover);
+}
+
+.button-primary:active {
+    background: #153d9b;
+}
+
+.button-primary span {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.back-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: fit-content;
+    min-height: 44px;
+    margin: 20px auto -8px;
+    color: var(--color-muted);
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.back-link:hover {
+    color: var(--color-blue);
+    text-decoration: underline;
+}
+
+.site-footer {
+    padding-top: 20px;
+    border-top: 1px solid #edf0f5;
+    font-size: 12px;
+}
+
+@media (max-width: 900px) {
+    .login-page {
+        padding: 28px 32px 24px;
+    }
+
+    .login-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+        gap: 32px;
+    }
+
+    .login-card {
+        padding: 32px;
+    }
+
+    .welcome h2 {
+        font-size: clamp(34px, 5.1vw, 46px);
+        letter-spacing: -2px;
+    }
+
+    .welcome-description {
+        font-size: 15px;
+    }
+}
+
+@media (max-width: 700px) {
+    .login-page {
+        max-width: 480px;
+        padding: 24px;
+    }
+
+    .site-caption,
+    .welcome-detail,
+    .desktop-break {
+        display: none;
+    }
+
+    .login-layout {
+        grid-template-columns: minmax(0, 1fr);
+        align-content: center;
+        gap: 32px;
+        padding: 44px 0;
+    }
+
+    .eyebrow {
+        margin-bottom: 14px;
+        font-size: 11px;
+    }
+
+    .welcome h2 {
+        font-size: 38px;
+        letter-spacing: -1.5px;
+    }
+
+    .welcome h2 br:first-of-type {
+        display: none;
+    }
+
+    .welcome-description {
+        margin-top: 18px;
+        max-width: 280px;
+        line-height: 1.6;
+    }
+
+    .login-card {
+        padding: 28px 24px;
+        border-radius: 20px;
+    }
+
+    .form-heading h1 {
+        font-size: 25px;
+    }
+
+    .login-form {
+        margin-top: 28px;
+    }
+}
+
+@media (max-width: 360px) {
+    .login-page {
+        padding: 20px 16px;
+    }
+
+    .brand {
+        gap: 10px;
+        font-size: 16px;
+    }
+
+    .welcome h2 {
+        font-size: 34px;
+    }
+
+    .login-card {
+        padding: 24px 20px;
+    }
+}
