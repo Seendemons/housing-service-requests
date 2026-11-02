@@ -358,3 +358,206 @@ input {
         padding: 24px 20px;
     }
 }
+
+/* Черновики жителя: стили ограничены собственным контейнером. */
+.draft-page {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    overflow-wrap: anywhere;
+}
+
+.draft-page .draft-header,
+.draft-page .draft-account,
+.draft-page .draft-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.draft-page .draft-header {
+    justify-content: space-between;
+    margin-bottom: 32px;
+}
+
+.draft-page .draft-brand {
+    font-size: 18px;
+    font-weight: 650;
+    text-decoration: none;
+}
+
+.draft-page .draft-account {
+    min-width: 0;
+    color: var(--color-muted);
+    font-size: 14px;
+}
+
+.draft-page .draft-account p {
+    margin: 0;
+    min-width: 0;
+}
+
+.draft-page .draft-logout {
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--color-blue);
+    cursor: pointer;
+}
+
+.draft-page .draft-panel {
+    padding: 32px;
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+}
+
+.draft-page h1 {
+    margin: 0;
+    font-size: clamp(25px, 4vw, 32px);
+    line-height: 1.25;
+}
+
+.draft-page .draft-note,
+.draft-page .draft-hint {
+    color: var(--color-muted);
+}
+
+.draft-page .draft-note {
+    margin: 16px 0 24px;
+}
+
+.draft-page .draft-button {
+    display: inline-block;
+    max-width: 100%;
+    min-height: 48px;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--color-blue);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    text-align: center;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+
+.draft-page .draft-button:hover {
+    background: var(--color-blue-hover);
+}
+
+.draft-page .draft-list {
+    display: grid;
+    gap: 16px;
+    padding: 0;
+    margin: 28px 0;
+    list-style: none;
+}
+
+.draft-page .draft-list li,
+.draft-page .draft-empty {
+    padding: 20px;
+    border-radius: 10px;
+    background: #f3f6fc;
+}
+
+.draft-page .draft-list a {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.draft-page .draft-status {
+    display: inline-block;
+    margin: 12px 0 0;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #edf3ff;
+    color: var(--color-blue);
+    font-size: 14px;
+}
+
+.draft-page .draft-list .draft-status {
+    margin: 0;
+}
+
+.draft-page .draft-form {
+    display: grid;
+    gap: 24px;
+}
+
+.draft-page .draft-field {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+}
+
+.draft-page .draft-field label,
+.draft-page .draft-details dt {
+    font-weight: 600;
+}
+
+.draft-page .draft-hint,
+.draft-page .draft-error {
+    margin: 0;
+    font-size: 14px;
+}
+
+.draft-page .draft-field input,
+.draft-page .draft-field textarea {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--color-text);
+    font: inherit;
+}
+
+.draft-page .draft-field textarea {
+    resize: vertical;
+}
+
+.draft-page :focus-visible {
+    outline: 3px solid var(--color-blue);
+    outline-offset: 3px;
+}
+
+.draft-page .draft-field [aria-invalid="true"] {
+    border-color: var(--color-error);
+}
+
+.draft-page .draft-error {
+    color: var(--color-error);
+}
+
+.draft-page .draft-details dd {
+    margin: 8px 0 24px;
+}
+
+.draft-page .draft-description {
+    white-space: pre-wrap;
+}
+
+@media (max-width: 480px) {
+    .draft-page {
+        padding: 20px 16px;
+    }
+
+    .draft-page .draft-panel {
+        padding: 24px 16px;
+    }
+
+    .draft-page .draft-header,
+    .draft-page .draft-account {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+}

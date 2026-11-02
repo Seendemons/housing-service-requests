@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Создать черновик — Жилищная служба{% endblock %}
+
+{% block content %}
+<div class="draft-page">
+    <header class="draft-header">
+        <a class="draft-brand" href="/">Жилищная служба</a>
+        <div class="draft-account">
+            <p>Логин: {{ user.login }} · Роль: житель</p>
+            <form method="post" action="/logout">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="draft-logout" type="submit">Выйти</button>
+            </form>
+        </div>
+    </header>
+    <main class="draft-panel">
+        <h1>Создать черновик</h1>
+        <p class="draft-note" id="draft-help">Сохранение создаст черновик. Он ещё не будет передан диспетчеру.</p>
+        <form class="draft-form" method="post" action="/resident/requests" aria-describedby="draft-help">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="draft-field">
+                <label for="location">Местоположение</label>
+                <p class="draft-hint" id="location-hint">Укажите подъезд, этаж, квартиру или другое место. До 255 символов.</p>
+                <input type="text" id="location" name="location" value="{{ location }}" required maxlength="255" aria-describedby="location-hint{% if errors.get('location') %} location-error{% endif %}"{% if errors.get('location') %} aria-invalid="true"{% endif %}>
+                {% if errors.get('location') %}
+                <p class="draft-error" id="location-error" role="alert">{{ errors.location }}</p>
+                {% endif %}
+            </div>
+            <div class="draft-field">
+                <label for="description">Описание проблемы</label>
+                <p class="draft-hint" id="description-hint">Опишите, что случилось и когда вы это заметили. До 10 000 символов.</p>
+                <textarea id="description" name="description" required maxlength="10000" rows="7" aria-describedby="description-hint{% if errors.get('description') %} description-error{% endif %}"{% if errors.get('description') %} aria-invalid="true"{% endif %}>{{ description }}</textarea>
+                {% if errors.get('description') %}
+                <p class="draft-error" id="description-error" role="alert">{{ errors.description }}</p>
+                {% endif %}
+            </div>
+            <div class="draft-actions">
+                <button class="draft-button" type="submit">Сохранить черновик</button>
+                <a href="/resident">Отмена</a>
+            </div>
+        </form>
+    </main>
+</div>
+{% endblock %}

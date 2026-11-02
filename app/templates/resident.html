@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Кабинет жителя — Жилищная служба{% endblock %}
+
+{% block content %}
+<div class="draft-page">
+    <header class="draft-header">
+        <a class="draft-brand" href="/">Жилищная служба</a>
+        <div class="draft-account">
+            <p>Логин: {{ user.login }} · Роль: житель</p>
+            <form method="post" action="/logout">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="draft-logout" type="submit">Выйти</button>
+            </form>
+        </div>
+    </header>
+    <main class="draft-panel">
+        <h1>Мои черновики</h1>
+        <p class="draft-note">Здесь сохранены ваши черновики. Они ещё не переданы диспетчеру.</p>
+        <a class="draft-button" href="/resident/requests/new">Создать черновик</a>
+        {% if drafts %}
+        <ul class="draft-list">
+            {% for draft in drafts %}
+            <li>
+                <a href="/resident/requests/{{ draft.id }}">Черновик № {{ draft.id }} — {{ draft.location }}</a>
+                <span class="draft-status">Черновик</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="draft-empty">У вас пока нет черновиков. Создайте первый, чтобы описать проблему в доме.</p>
+        {% endif %}
+        <p><a href="/">На главную</a></p>
+    </main>
+</div>
+{% endblock %}
