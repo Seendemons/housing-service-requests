@@ -63,7 +63,8 @@ cp -n .env.example .env
 
 Подготовлена конфигурация PostgreSQL 17 и слой подключения через SQLAlchemy.
 Для запуска БД нужны установленный Docker с работающим Docker Engine
-и Docker Compose v2 (`docker compose`). Реальное подключение пока не проверено.
+и Docker Compose v2 (`docker compose`). Локальный запуск PostgreSQL, сохранение
+данных после перезапуска и подключение через SQLAlchemy проверены.
 
 Из корня проекта создайте `.env` без перезаписи существующего файла:
 
