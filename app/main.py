@@ -19,7 +19,7 @@ from app.auth import (
 )
 from app.config import Settings
 from app.database import get_db
-from app.models import Role, User
+from app.models import RequestStatus, Role, ServiceRequest, User
 
 settings = Settings()
 app = FastAPI(title=settings.app_name, debug=settings.app_debug)
@@ -122,7 +122,116 @@ def account(request: Request, db: Session, role: Role):
 
 @app.get("/resident")
 def resident(request: Request, db: DB):
-    return account(request, db, Role.RESIDENT)
+    session = get_session(request, db)
+    user = require_role(session, Role.RESIDENT)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    drafts = db.scalars(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.resident_id == user.id,
+            ServiceRequest.status == RequestStatus.DRAFT,
+        )
+        .order_by(ServiceRequest.created_at.desc(), ServiceRequest.id.desc())
+    ).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="resident.html",
+        context={"user": user, "csrf_token": session.csrf_token, "drafts": drafts},
+    )
+
+
+@app.get("/resident/requests/new")
+def new_request(request: Request, db: DB):
+    session = get_session(request, db)
+    user = require_role(session, Role.RESIDENT)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="request_form.html",
+        context={
+            "user": user,
+            "csrf_token": session.csrf_token,
+            "location": "",
+            "description": "",
+            "errors": {},
+        },
+    )
+
+
+@app.post("/resident/requests")
+def create_request(
+    request: Request,
+    db: DB,
+    csrf_token: Annotated[str, Form()] = "",
+    location: Annotated[str, Form()] = "",
+    description: Annotated[str, Form()] = "",
+):
+    session = get_session(request, db)
+    user = require_role(session, Role.RESIDENT)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    check_csrf(session, csrf_token)
+    clean_location = location.strip()
+    clean_description = description.strip()
+    errors = {}
+    if not clean_location:
+        errors["location"] = "Укажите местоположение."
+    elif len(clean_location) > 255:
+        errors["location"] = "Местоположение должно содержать не более 255 символов."
+    if not clean_description:
+        errors["description"] = "Укажите описание."
+    elif len(clean_description) > 10000:
+        errors["description"] = "Описание должно содержать не более 10000 символов."
+    if errors:
+        return templates.TemplateResponse(
+            request=request,
+            name="request_form.html",
+            context={
+                "user": user,
+                "csrf_token": session.csrf_token,
+                "location": location,
+                "description": description,
+                "errors": errors,
+            },
+            status_code=422,
+        )
+    service_request = ServiceRequest(
+        resident_id=user.id,
+        status=RequestStatus.DRAFT,
+        location=clean_location,
+        description=clean_description,
+    )
+    db.add(service_request)
+    db.commit()
+    return RedirectResponse(f"/resident/requests/{service_request.id}", status_code=303)
+
+
+@app.get("/resident/requests/{request_id}")
+def request_detail(request: Request, request_id: int, db: DB):
+    session = get_session(request, db)
+    user = require_role(session, Role.RESIDENT)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    service_request = db.scalar(
+        select(ServiceRequest).where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.resident_id == user.id,
+            ServiceRequest.status == RequestStatus.DRAFT,
+        )
+    )
+    if service_request is None:
+        raise HTTPException(status_code=404, detail="Черновик не найден")
+    return templates.TemplateResponse(
+        request=request,
+        name="request_detail.html",
+        context={
+            "user": user,
+            "csrf_token": session.csrf_token,
+            "service_request": service_request,
+        },
+    )
 
 
 @app.get("/dispatcher")
