@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Заявки в жилищную службу"
     app_debug: bool = False
+    session_cookie_secure: bool = False
 
     @field_validator("app_name")
     @classmethod
@@ -51,3 +52,16 @@ class DatabaseSettings(BaseSettings):
         if not 1 <= value <= 65535:
             raise ValueError("Порт БД должен быть от 1 до 65535")
         return value
+
+
+class DemoSettings(BaseSettings):
+    """Пароли требуются только при явном создании демо-пользователей."""
+
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).resolve().parent.parent / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        hide_input_in_errors=True,
+    )
+    demo_resident_password: SecretStr = SecretStr("")
+    demo_dispatcher_password: SecretStr = SecretStr("")

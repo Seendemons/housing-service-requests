@@ -20,6 +20,14 @@ def test_migration_upgrade_downgrade_and_metadata():
             == []
         )
         assert "service_requests" in inspect(connection).get_table_names()
+        command.downgrade(config, "0001")
+        assert "auth_sessions" not in inspect(connection).get_table_names()
+        assert "users" in inspect(connection).get_table_names()
+        command.upgrade(config, "head")
+        assert (
+            compare_metadata(MigrationContext.configure(connection), Base.metadata)
+            == []
+        )
         command.downgrade(config, "base")
         assert "service_requests" not in inspect(connection).get_table_names()
         command.upgrade(config, "head")

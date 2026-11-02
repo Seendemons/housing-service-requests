@@ -126,3 +126,26 @@ def test_empty_database_fields_are_rejected(field, value):
 
     with pytest.raises(ValidationError):
         DatabaseSettings(_env_file=None, **{field: value})
+
+
+def test_demo_settings_file_priority_and_secrets(tmp_path, monkeypatch):
+    from app.config import DemoSettings
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "DEMO_RESIDENT_PASSWORD=file-secret\nDEMO_DISPATCHER_PASSWORD=other-secret\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("DEMO_RESIDENT_PASSWORD", "environment-secret")
+    settings = DemoSettings(_env_file=env_file)
+    assert settings.demo_resident_password.get_secret_value() == "environment-secret"
+    assert settings.demo_dispatcher_password.get_secret_value() == "other-secret"
+    assert "secret" not in repr(settings)
+    assert Path(DemoSettings.model_config["env_file"]).is_absolute()
+
+
+def test_secure_cookie_setting(monkeypatch):
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
+    assert Settings(_env_file=None).session_cookie_secure is True
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    assert Settings(_env_file=None).session_cookie_secure is False

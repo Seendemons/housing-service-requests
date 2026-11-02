@@ -9,6 +9,10 @@ def test_home_page(monkeypatch):
     monkeypatch.setattr("app.config.Settings", lambda: Settings(_env_file=None))
     from app.main import app
 
+    def no_database():
+        raise AssertionError("Главная страница не должна обращаться к БД")
+
+    monkeypatch.setattr("app.database.get_session_factory", no_database)
     with TestClient(app) as client:
         response = client.get("/")
 

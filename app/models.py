@@ -149,3 +149,18 @@ class RequestHistory(Base):
     )
     request: Mapped[ServiceRequest] = relationship(back_populates="history")
     actor: Mapped[User] = relationship(back_populates="history_entries")
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_digest: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    csrf_token: Mapped[str] = mapped_column(String(43), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    user: Mapped[User | None] = relationship()
