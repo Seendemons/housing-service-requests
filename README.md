@@ -61,9 +61,9 @@ cp -n .env.example .env
 
 ## PostgreSQL через Docker Compose
 
-Подготовлена конфигурация PostgreSQL 17; приложение пока не подключено к БД.
-Для будущего запуска нужны установленный Docker с работающим Docker Engine
-и Docker Compose v2 (`docker compose`). Установка и запуск БД ещё не проверены.
+Подготовлена конфигурация PostgreSQL 17 и слой подключения через SQLAlchemy.
+Для запуска БД нужны установленный Docker с работающим Docker Engine
+и Docker Compose v2 (`docker compose`). Реальное подключение пока не проверено.
 
 Из корня проекта создайте `.env` без перезаписи существующего файла:
 
@@ -82,7 +82,7 @@ cp -n .env.example .env
 docker compose config --quiet
 ```
 
-Для будущего запуска и проверки состояния:
+Для запуска и проверки состояния:
 
 ```bash
 docker compose up -d db
@@ -93,8 +93,39 @@ docker compose ps
 При подключении приложения с этого компьютера используйте хост `127.0.0.1`,
 порт из `POSTGRES_PORT` (по умолчанию `5432`), имя БД из `POSTGRES_DB`,
 пользователя из `POSTGRES_USER` и пароль из `POSTGRES_PASSWORD`.
-В шаблоне имя БД — `housing_requests`, пользователь — `housing_user`.
+`POSTGRES_HOST` задаёт хост приложения и по умолчанию равен `127.0.0.1`;
+Compose его не использует. В шаблоне имя БД — `housing_requests`,
+пользователь — `housing_user`.
 Порт БД доступен только на локальном интерфейсе компьютера.
+
+Проверить соединение с запущенной БД из корня проекта можно командой:
+
+```bash
+uv run python -c $'from sqlalchemy import text\nfrom app.database import get_engine\nwith get_engine().connect() as connection:\n    print(connection.scalar(text("SELECT 1")))'
+```
+
+При успешном соединении команда выводит `1`. `app.database.get_engine()`
+лениво создаёт и сохраняет engine; сам вызов без запроса соединения с сервером
+не устанавливает. `get_db()` — зависимость FastAPI для синхронной `Session`:
+она закрывает сессию и откатывает транзакцию при ошибке. Автоматического
+`commit()` нет: успешные изменения обработчик должен подтвердить явно.
+Перезапустите приложение после изменения настроек БД, чтобы создать новый engine.
+Главная страница и импорт приложения работают без запущенной БД.
+
+Пример использования зависимости в обработчике FastAPI:
+
+```python
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+
+
+def example_handler(db: Session = Depends(get_db)):
+    # Здесь можно выполнить запросы через db.
+    # После нужных изменений вызовите db.commit().
+    pass
+```
 
 Для остановки:
 
@@ -116,7 +147,8 @@ docker compose down
 ```text
 app/
   __init__.py
-  config.py             # Настройки приложения и чтение .env
+  config.py             # Настройки приложения и БД, чтение .env
+  database.py           # Engine и сессии SQLAlchemy
   main.py               # Приложение FastAPI и маршрут главной страницы
   templates/
     index.html          # HTML-шаблон главной страницы
@@ -140,7 +172,9 @@ uv run ruff format --check .
 uv run pytest
 ```
 
-Ruff проверяет код и форматирование, а pytest проверяет настройки и главную HTML-страницу.
+Ruff проверяет код и форматирование, а pytest проверяет настройки, главную страницу
+и работу сессий на SQLite. Эти тесты не требуют PostgreSQL и не подтверждают
+реальное подключение к нему; его можно проверить командой `SELECT 1` выше.
 
 ## Авторские права
 

@@ -10,6 +10,14 @@ from app.config import Settings
 def clear_settings_env(monkeypatch):
     monkeypatch.delenv("APP_NAME", raising=False)
     monkeypatch.delenv("APP_DEBUG", raising=False)
+    for name in (
+        "POSTGRES_HOST",
+        "POSTGRES_PORT",
+        "POSTGRES_DB",
+        "POSTGRES_USER",
+        "POSTGRES_PASSWORD",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 def test_defaults_without_env_file():
@@ -65,3 +73,56 @@ def test_default_env_path_is_absolute_and_independent_of_cwd(tmp_path, monkeypat
     assert Settings.model_config["env_file"] == (
         Path(__file__).resolve().parent.parent / ".env"
     )
+
+
+def test_database_settings_dotenv_and_environment_priority(tmp_path, monkeypatch):
+    from app.config import DatabaseSettings
+
+    for name in (
+        "POSTGRES_HOST",
+        "POSTGRES_PORT",
+        "POSTGRES_DB",
+        "POSTGRES_USER",
+        "POSTGRES_PASSWORD",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "POSTGRES_HOST=from-file\nPOSTGRES_PORT=5433\n"
+        "POSTGRES_DB=testdb\nPOSTGRES_USER=testuser\nPOSTGRES_PASSWORD=example\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("POSTGRES_HOST", "from-environment")
+
+    settings = DatabaseSettings(_env_file=env_file)
+
+    assert settings.postgres_host == "from-environment"
+    assert settings.postgres_port == 5433
+    assert settings.postgres_db == "testdb"
+    assert settings.postgres_user == "testuser"
+    assert settings.postgres_password.get_secret_value() == "example"
+    assert "example" not in repr(settings)
+
+
+def test_database_settings_are_not_checked_by_app_settings(monkeypatch):
+    monkeypatch.setenv("POSTGRES_PORT", "invalid")
+    assert Settings(_env_file=None).app_debug is False
+
+
+@pytest.mark.parametrize("port", [0, 65536, "invalid"])
+def test_invalid_database_port_is_rejected_without_echoing_input(port):
+    from app.config import DatabaseSettings
+
+    with pytest.raises(ValidationError) as error:
+        DatabaseSettings(_env_file=None, postgres_port=port)
+    assert "input_value" not in str(error.value)
+    assert "invalid" not in str(error.value)
+
+
+@pytest.mark.parametrize("field", ["postgres_host", "postgres_db", "postgres_user"])
+@pytest.mark.parametrize("value", ["", "   "])
+def test_empty_database_fields_are_rejected(field, value):
+    from app.config import DatabaseSettings
+
+    with pytest.raises(ValidationError):
+        DatabaseSettings(_env_file=None, **{field: value})
