@@ -43,6 +43,37 @@ def client():
         engine.dispose()
 
 
+@pytest.fixture
+def draft_id(client):
+    _, factory = client
+    with factory.begin() as db:
+        draft = ServiceRequest(
+            resident_id=1,
+            location="Подъезд 1",
+            description="Течёт труба",
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        db.add(draft)
+        db.flush()
+        return draft.id
+
+
+def draft_snapshot(factory, request_id):
+    with factory() as db:
+        row = db.get(ServiceRequest, request_id)
+        return (
+            row.resident_id,
+            row.status,
+            row.location,
+            row.description,
+            row.created_at,
+            row.updated_at,
+            row.executor_id,
+            row.closing_comment,
+        )
+
+
 def sign_in(c, factory, user_id=1):
     with factory.begin() as db:
         user = db.get(User, user_id) if user_id is not None else None
@@ -149,8 +180,9 @@ def test_list_only_own_drafts_newest_first_and_detail_access(client):
 
 
 @pytest.mark.parametrize("identity", ["anonymous", "guest", "expired", "dispatcher"])
-def test_all_routes_require_active_resident_session(client, identity):
+def test_all_routes_require_active_resident_session(client, draft_id, identity):
     c, factory = client
+    before = draft_snapshot(factory, draft_id)
     token = ""
     if identity != "anonymous":
         token = sign_in(
@@ -168,6 +200,8 @@ def test_all_routes_require_active_resident_session(client, identity):
         ("GET", "/resident/requests/new"),
         ("GET", "/resident/requests/1"),
         ("POST", "/resident/requests"),
+        ("GET", f"/resident/requests/{draft_id}/edit"),
+        ("POST", f"/resident/requests/{draft_id}/edit"),
     ]:
         response = c.request(
             method,
@@ -178,7 +212,8 @@ def test_all_routes_require_active_resident_session(client, identity):
         assert response.status_code == (403 if identity == "dispatcher" else 303)
         if identity != "dispatcher":
             assert response.headers["location"] == "/login"
-    assert draft_count(factory) == 0
+    assert draft_count(factory) == 1
+    assert draft_snapshot(factory, draft_id) == before
 
 
 def test_creation_rejects_missing_invalid_and_other_session_csrf(client):
@@ -213,13 +248,26 @@ def test_creation_rejects_missing_invalid_and_other_session_csrf(client):
         ("Место\x00", "Описание\x00", {"location", "description"}),
     ],
 )
+@pytest.mark.parametrize("operation", ["create", "edit"])
 def test_invalid_form_preserves_values_and_does_not_save(
-    client, reject_nul_sql_parameters, location, description, error_fields
+    client,
+    draft_id,
+    reject_nul_sql_parameters,
+    location,
+    description,
+    error_fields,
+    operation,
 ):
     c, factory = client
     token = sign_in(c, factory)
+    before = draft_snapshot(factory, draft_id)
+    url = (
+        "/resident/requests"
+        if operation == "create"
+        else f"/resident/requests/{draft_id}/edit"
+    )
     response = c.post(
-        "/resident/requests",
+        url,
         data={"csrf_token": token, "location": location, "description": description},
     )
     assert response.status_code == 422
@@ -232,7 +280,11 @@ def test_invalid_form_preserves_values_and_does_not_save(
         if "\x00" in value:
             assert "нулевой символ" in response.context["errors"][field]
     assert csrf(response) == token
-    assert draft_count(factory) == 0
+    assert draft_count(factory) == 1
+    assert draft_snapshot(factory, draft_id) == before
+    if operation == "edit":
+        assert response.context["edit_id"] == draft_id
+        assert f'action="{url}"' in response.text
 
 
 @pytest.mark.parametrize("location,description", [("я", "я"), ("я" * 255, "я" * 10000)])
@@ -288,4 +340,132 @@ def test_form_and_saved_data_escape_html(client):
         assert escape("<script>") in page.text
     with factory() as db:
         row = db.scalar(select(ServiceRequest))
+        assert row.location == location and row.description == description
+
+
+def test_edit_prefills_current_values_and_cancel_keeps_database(client, draft_id):
+    c, factory = client
+    token = sign_in(c, factory)
+    before = draft_snapshot(factory, draft_id)
+    detail_url = f"/resident/requests/{draft_id}"
+    edit_url = f"{detail_url}/edit"
+    assert f'href="{edit_url}"' in c.get(detail_url).text
+    for _ in range(2):
+        form = c.get(edit_url)
+        assert form.status_code == 200
+        assert csrf(form) == token
+        assert form.context["location"] == before[2]
+        assert form.context["description"] == before[3]
+        assert form.context["errors"] == {}
+        assert f'action="{edit_url}"' in form.text
+        assert f'href="{detail_url}">Отмена</a>' in form.text
+    assert c.get(detail_url).status_code == 200
+    assert draft_snapshot(factory, draft_id) == before
+    assert draft_count(factory) == 1
+
+
+@pytest.mark.parametrize("location,description", [("я", "я"), ("я" * 255, "я" * 10000)])
+def test_edit_saves_existing_draft_and_ignores_privileged_fields(
+    client, draft_id, location, description
+):
+    c, factory = client
+    token = sign_in(c, factory)
+    before = draft_snapshot(factory, draft_id)
+    response = c.post(
+        f"/resident/requests/{draft_id}/edit",
+        data={
+            "csrf_token": token,
+            "location": f" {location}\n",
+            "description": f"\t{description} ",
+            "id": "999",
+            "resident_id": "2",
+            "status": "closed",
+            "executor_id": "123",
+            "closing_comment": "Подмена",
+            "updated_at": "2000-01-01",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/resident/requests/{draft_id}"
+    after = draft_snapshot(factory, draft_id)
+    assert after[:2] == before[:2]
+    assert after[2:4] == (location, description)
+    assert after[4] == before[4]
+    assert after[5] > before[5]
+    assert after[6:] == before[6:]
+    assert draft_count(factory) == 1
+    # Обновлённый текст читается из новой сессии БД и после повторного входа.
+    sign_in(c, factory)
+    for page in (c.get(response.headers["location"]), c.get("/resident")):
+        assert location in page.text
+    assert description in c.get(response.headers["location"]).text
+
+
+@pytest.mark.parametrize("status", list(RequestStatus))
+def test_edit_rechecks_owner_and_current_status(client, draft_id, status):
+    c, factory = client
+    token = sign_in(c, factory)
+    url = f"/resident/requests/{draft_id}/edit"
+    assert c.get(url).status_code == 200
+    with factory.begin() as db:
+        row = db.get(ServiceRequest, draft_id)
+        row.status = status
+        if status == RequestStatus.DRAFT:
+            row.resident_id = 2
+    before = draft_snapshot(factory, draft_id)
+    for request_id in (draft_id, 999):
+        url = f"/resident/requests/{request_id}/edit"
+        assert c.get(url).status_code == 404
+        response = c.post(
+            url,
+            data={"csrf_token": token, "location": "Новое", "description": "Текст"},
+        )
+        assert response.status_code == 404
+        assert before[2] not in response.text and before[3] not in response.text
+    assert draft_snapshot(factory, draft_id) == before
+    assert draft_count(factory) == 1
+
+
+def test_edit_rejects_invalid_and_other_session_csrf(client, draft_id):
+    c, factory = client
+    token = sign_in(c, factory)
+    before = draft_snapshot(factory, draft_id)
+    with TestClient(app) as other:
+        other_token = sign_in(other, factory, 2)
+    for invalid in (None, "", "invalid", "ä" * 43, other_token):
+        data = {"location": "Новое", "description": "Текст"}
+        if invalid is not None:
+            data["csrf_token"] = invalid
+        assert (
+            c.post(f"/resident/requests/{draft_id}/edit", data=data).status_code == 403
+        )
+    assert draft_snapshot(factory, draft_id) == before
+    assert csrf(c.get(f"/resident/requests/{draft_id}/edit")) == token
+
+
+def test_edited_html_is_escaped_in_form_card_and_list(client, draft_id):
+    c, factory = client
+    token = sign_in(c, factory)
+    location = '"><script>alert(1)</script>'
+    description = "</textarea><script>alert(2)</script>\nВторая строка"
+    url = f"/resident/requests/{draft_id}/edit"
+    response = c.post(
+        url,
+        data={"csrf_token": token, "location": location, "description": description},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    for page in (c.get(url), c.get(response.headers["location"]), c.get("/resident")):
+        assert page.status_code == 200
+        assert location not in page.text and description not in page.text
+        assert "&lt;script&gt;" in page.text
+    invalid = c.post(
+        url, data={"csrf_token": token, "location": "", "description": description}
+    )
+    assert invalid.status_code == 422
+    assert description not in invalid.text
+    assert "&lt;/textarea&gt;" in invalid.text
+    with factory() as db:
+        row = db.get(ServiceRequest, draft_id)
         assert row.location == location and row.description == description

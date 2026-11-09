@@ -19,7 +19,7 @@ from app.auth import (
 )
 from app.config import Settings
 from app.database import get_db
-from app.models import RequestStatus, Role, ServiceRequest, User
+from app.models import RequestStatus, Role, ServiceRequest, User, utc_now
 
 settings = Settings()
 app = FastAPI(title=settings.app_name, debug=settings.app_debug)
@@ -160,6 +160,23 @@ def new_request(request: Request, db: DB):
     )
 
 
+def draft_form_errors(location: str, description: str) -> dict[str, str]:
+    errors = {}
+    if not location:
+        errors["location"] = "Укажите местоположение."
+    elif "\x00" in location:
+        errors["location"] = "Местоположение не должно содержать нулевой символ."
+    elif len(location) > 255:
+        errors["location"] = "Местоположение должно содержать не более 255 символов."
+    if not description:
+        errors["description"] = "Укажите описание."
+    elif "\x00" in description:
+        errors["description"] = "Описание не должно содержать нулевой символ."
+    elif len(description) > 10000:
+        errors["description"] = "Описание должно содержать не более 10000 символов."
+    return errors
+
+
 @app.post("/resident/requests")
 def create_request(
     request: Request,
@@ -175,19 +192,7 @@ def create_request(
     check_csrf(session, csrf_token)
     clean_location = location.strip()
     clean_description = description.strip()
-    errors = {}
-    if not clean_location:
-        errors["location"] = "Укажите местоположение."
-    elif "\x00" in clean_location:
-        errors["location"] = "Местоположение не должно содержать нулевой символ."
-    elif len(clean_location) > 255:
-        errors["location"] = "Местоположение должно содержать не более 255 символов."
-    if not clean_description:
-        errors["description"] = "Укажите описание."
-    elif "\x00" in clean_description:
-        errors["description"] = "Описание не должно содержать нулевой символ."
-    elif len(clean_description) > 10000:
-        errors["description"] = "Описание должно содержать не более 10000 символов."
+    errors = draft_form_errors(clean_location, clean_description)
     if errors:
         return templates.TemplateResponse(
             request=request,
@@ -212,21 +217,26 @@ def create_request(
     return RedirectResponse(f"/resident/requests/{service_request.id}", status_code=303)
 
 
+def get_own_draft(db: Session, request_id: int, resident_id: int) -> ServiceRequest:
+    service_request = db.scalar(
+        select(ServiceRequest).where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.resident_id == resident_id,
+            ServiceRequest.status == RequestStatus.DRAFT,
+        )
+    )
+    if service_request is None:
+        raise HTTPException(status_code=404, detail="Черновик не найден")
+    return service_request
+
+
 @app.get("/resident/requests/{request_id}")
 def request_detail(request: Request, request_id: int, db: DB):
     session = get_session(request, db)
     user = require_role(session, Role.RESIDENT)
     if user is None:
         return RedirectResponse("/login", status_code=303)
-    service_request = db.scalar(
-        select(ServiceRequest).where(
-            ServiceRequest.id == request_id,
-            ServiceRequest.resident_id == user.id,
-            ServiceRequest.status == RequestStatus.DRAFT,
-        )
-    )
-    if service_request is None:
-        raise HTTPException(status_code=404, detail="Черновик не найден")
+    service_request = get_own_draft(db, request_id, user.id)
     return templates.TemplateResponse(
         request=request,
         name="request_detail.html",
@@ -236,6 +246,66 @@ def request_detail(request: Request, request_id: int, db: DB):
             "service_request": service_request,
         },
     )
+
+
+@app.get("/resident/requests/{request_id}/edit")
+def edit_request_page(request: Request, request_id: int, db: DB):
+    session = get_session(request, db)
+    user = require_role(session, Role.RESIDENT)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    service_request = get_own_draft(db, request_id, user.id)
+    return templates.TemplateResponse(
+        request=request,
+        name="request_form.html",
+        context={
+            "user": user,
+            "csrf_token": session.csrf_token,
+            "edit_id": service_request.id,
+            "location": service_request.location,
+            "description": service_request.description,
+            "errors": {},
+        },
+    )
+
+
+@app.post("/resident/requests/{request_id}/edit")
+def edit_request(
+    request: Request,
+    request_id: int,
+    db: DB,
+    csrf_token: Annotated[str, Form()] = "",
+    location: Annotated[str, Form()] = "",
+    description: Annotated[str, Form()] = "",
+):
+    session = get_session(request, db)
+    user = require_role(session, Role.RESIDENT)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    check_csrf(session, csrf_token)
+    service_request = get_own_draft(db, request_id, user.id)
+    clean_location = location.strip()
+    clean_description = description.strip()
+    errors = draft_form_errors(clean_location, clean_description)
+    if errors:
+        return templates.TemplateResponse(
+            request=request,
+            name="request_form.html",
+            context={
+                "user": user,
+                "csrf_token": session.csrf_token,
+                "edit_id": service_request.id,
+                "location": location,
+                "description": description,
+                "errors": errors,
+            },
+            status_code=422,
+        )
+    service_request.location = clean_location
+    service_request.description = clean_description
+    service_request.updated_at = utc_now()
+    db.commit()
+    return RedirectResponse(f"/resident/requests/{service_request.id}", status_code=303)
 
 
 @app.get("/dispatcher")

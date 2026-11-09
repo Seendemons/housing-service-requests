@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Создать черновик — Жилищная служба{% endblock %}
+{% block title %}{% if edit_id %}Редактировать черновик{% else %}Создать черновик{% endif %} — Жилищная служба{% endblock %}
 
 {% block content %}
 <div class="draft-page">
@@ -15,9 +15,9 @@
         </div>
     </header>
     <main class="draft-panel">
-        <h1>Создать черновик</h1>
-        <p class="draft-note" id="draft-help">Сохранение создаст черновик. Он ещё не будет передан диспетчеру.</p>
-        <form class="draft-form" method="post" action="/resident/requests" aria-describedby="draft-help">
+        <h1>{% if edit_id %}Редактировать черновик № {{ edit_id }}{% else %}Создать черновик{% endif %}</h1>
+        <p class="draft-note" id="draft-help">{% if edit_id %}Изменения сохранятся в черновике. Он ещё не будет передан диспетчеру.{% else %}Сохранение создаст черновик. Он ещё не будет передан диспетчеру.{% endif %}</p>
+        <form class="draft-form" method="post" action="/resident/requests{% if edit_id %}/{{ edit_id }}/edit{% endif %}" aria-describedby="draft-help">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="draft-field">
                 <label for="location">Местоположение</label>
@@ -36,8 +36,8 @@
                 {% endif %}
             </div>
             <div class="draft-actions">
-                <button class="draft-button" type="submit">Сохранить черновик</button>
-                <a href="/resident">Отмена</a>
+                <button class="draft-button" type="submit">{% if edit_id %}Сохранить изменения{% else %}Сохранить черновик{% endif %}</button>
+                <a href="/resident{% if edit_id %}/requests/{{ edit_id }}{% endif %}">Отмена</a>
             </div>
         </form>
     </main>

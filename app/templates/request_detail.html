@@ -26,7 +26,10 @@
             <dt>Дата создания (UTC)</dt>
             <dd>{{ service_request.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</dd>
         </dl>
-        <p><a href="/resident">К списку черновиков</a></p>
+        <div class="draft-actions">
+            <a class="draft-button" href="/resident/requests/{{ service_request.id }}/edit">Редактировать</a>
+            <a href="/resident">К списку черновиков</a>
+        </div>
     </main>
 </div>
 {% endblock %}

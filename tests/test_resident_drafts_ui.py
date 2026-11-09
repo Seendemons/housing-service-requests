@@ -172,3 +172,24 @@ def test_detail_renders_model_content_safely_with_creation_time(draft):
     assert page.find("dd", **{"class": "draft-description"})
     assert page.find("a", href="/resident")
     assert "Ещё не передан диспетчеру" in text
+    assert page.find("a", href="/resident/requests/42/edit")
+
+
+def test_edit_form_has_current_values_save_and_cancel(draft):
+    page = Page(
+        render(
+            "request_form.html",
+            edit_id=draft.id,
+            location=draft.location,
+            description=draft.description,
+        ).body.decode()
+    )
+    assert page.find("form", method="post", action="/resident/requests/42/edit")
+    assert page.find("a", href="/resident/requests/42")
+    assert page.find("input", name="location")[0]["value"] == draft.location
+    assert draft.description in "".join(page.text)
+    assert "Сохранить изменения" in page.text
+    assert "Редактировать черновик № 42" in "".join(page.text)
+    assert not page.find("script")
+    assert len(page.find("textarea")) == 1
+    assert page.find("input", name="csrf_token", value="test-token")
