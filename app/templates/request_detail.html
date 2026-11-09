@@ -31,9 +31,32 @@
             <dd>{{ service_request.location }}</dd>
             <dt>Описание проблемы</dt>
             <dd class="draft-description">{{ service_request.description }}</dd>
+            <dt>Исполнитель</dt>
+            <dd>{% if service_request.executor %}{{ service_request.executor.name }}{% if service_request.executor.specialization %} · {{ service_request.executor.specialization }}{% endif %}{% else %}Не назначен{% endif %}</dd>
             <dt>Дата создания (UTC)</dt>
             <dd>{{ service_request.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</dd>
         </dl>
+        {% if is_dispatcher and service_request.status.value == 'new' %}
+        <h2>Начало работы</h2>
+        {% if assignment_error %}<p class="draft-error" id="assignment-error" role="alert">{{ assignment_error }}</p>{% endif %}
+        {% if executors %}
+        <form class="draft-form" method="post" action="/dispatcher/requests/{{ service_request.id }}/start">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="draft-field">
+                <label for="executor_id">Исполнитель</label>
+                <select id="executor_id" name="executor_id" required{% if assignment_error %} aria-invalid="true" aria-describedby="assignment-error"{% endif %}>
+                    <option value="">Выберите исполнителя</option>
+                    {% for executor in executors %}
+                    <option value="{{ executor.id }}">{{ executor.name }}{% if executor.specialization %} · {{ executor.specialization }}{% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="draft-actions"><button class="draft-button" type="submit">Назначить и начать работу</button></div>
+        </form>
+        {% else %}
+        <p class="draft-note">В справочнике пока нет исполнителей. Назначение станет доступно после его заполнения.</p>
+        {% endif %}
+        {% endif %}
         <h2>История заявки</h2>
         {% if history %}
         <ol class="draft-history">

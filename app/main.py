@@ -20,6 +20,7 @@ from app.auth import (
 from app.config import Settings
 from app.database import get_db
 from app.models import (
+    Executor,
     RequestHistory,
     RequestStatus,
     Role,
@@ -425,6 +426,11 @@ def dispatcher_request_detail(request: Request, request_id: int, db: DB):
     user = require_role(session, Role.DISPATCHER)
     if user is None:
         return RedirectResponse("/login", status_code=303)
+    service_request = get_dispatcher_request(db, request_id)
+    return dispatcher_detail_response(request, db, session, user, service_request)
+
+
+def get_dispatcher_request(db: Session, request_id: int) -> ServiceRequest:
     service_request = db.scalar(
         select(ServiceRequest)
         .where(
@@ -435,6 +441,19 @@ def dispatcher_request_detail(request: Request, request_id: int, db: DB):
     )
     if service_request is None:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
+    return service_request
+
+
+def dispatcher_detail_response(
+    request,
+    db,
+    session,
+    user,
+    service_request,
+    *,
+    assignment_error=None,
+    status_code=200,
+):
     return templates.TemplateResponse(
         request=request,
         name="request_detail.html",
@@ -443,5 +462,79 @@ def dispatcher_request_detail(request: Request, request_id: int, db: DB):
             "csrf_token": session.csrf_token,
             "service_request": service_request,
             "history": request_history(db, service_request.id),
+            "executors": db.scalars(
+                select(Executor).order_by(Executor.name, Executor.id)
+            ).all()
+            if service_request.status == RequestStatus.NEW
+            else [],
+            "assignment_error": assignment_error,
         },
+        status_code=status_code,
     )
+
+
+@app.post("/dispatcher/requests/{request_id}/start")
+def start_request(
+    request: Request,
+    request_id: int,
+    db: DB,
+    csrf_token: Annotated[str, Form()] = "",
+    executor_id: Annotated[str, Form()] = "",
+):
+    session = get_session(request, db)
+    user = require_role(session, Role.DISPATCHER)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    check_csrf(session, csrf_token)
+    service_request = get_dispatcher_request(db, request_id)
+    if service_request.status != RequestStatus.NEW:
+        raise HTTPException(
+            status_code=409, detail="В работу можно взять только новую заявку"
+        )
+    # Ограничиваем число до преобразования и SQL (integer в PostgreSQL).
+    valid_id = (
+        1 <= len(executor_id) <= 10
+        and executor_id.isascii()
+        and executor_id.isdecimal()
+        and 1 <= int(executor_id) <= 2147483647
+    )
+    executor = db.get(Executor, int(executor_id)) if valid_id else None
+    if executor is None:
+        return dispatcher_detail_response(
+            request,
+            db,
+            session,
+            user,
+            service_request,
+            assignment_error="Выберите существующего исполнителя из справочника.",
+            status_code=422,
+        )
+    started_at = utc_now()
+    # Только один диспетчер может выполнить переход, даже из устаревшей формы.
+    result = db.execute(
+        update(ServiceRequest)
+        .where(
+            ServiceRequest.id == request_id, ServiceRequest.status == RequestStatus.NEW
+        )
+        .values(
+            executor_id=executor.id,
+            status=RequestStatus.IN_PROGRESS,
+            updated_at=started_at,
+        )
+    )
+    if result.rowcount != 1:
+        raise HTTPException(
+            status_code=409, detail="В работу можно взять только новую заявку"
+        )
+    db.add(
+        RequestHistory(
+            request_id=request_id,
+            actor_id=user.id,
+            previous_status=RequestStatus.NEW,
+            new_status=RequestStatus.IN_PROGRESS,
+            comment=f"Назначен исполнитель: {executor.name}.",
+            created_at=started_at,
+        )
+    )
+    db.commit()
+    return RedirectResponse(f"/dispatcher/requests/{request_id}", status_code=303)

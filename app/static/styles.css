@@ -509,6 +509,7 @@ input {
 }
 
 .draft-page .draft-field input,
+.draft-page .draft-field select,
 .draft-page .draft-field textarea {
     width: 100%;
     min-width: 0;
