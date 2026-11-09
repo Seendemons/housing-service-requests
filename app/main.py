@@ -68,7 +68,7 @@ def login(
     check_csrf(session, csrf_token)
     user = (
         db.scalar(select(User).where(User.login == login))
-        if len(login) <= 255
+        if len(login) <= 255 and "\x00" not in login
         else None
     )
     if user is None or not verify_password(password, user.password_hash):
@@ -178,10 +178,14 @@ def create_request(
     errors = {}
     if not clean_location:
         errors["location"] = "Укажите местоположение."
+    elif "\x00" in clean_location:
+        errors["location"] = "Местоположение не должно содержать нулевой символ."
     elif len(clean_location) > 255:
         errors["location"] = "Местоположение должно содержать не более 255 символов."
     if not clean_description:
         errors["description"] = "Укажите описание."
+    elif "\x00" in clean_description:
+        errors["description"] = "Описание не должно содержать нулевой символ."
     elif len(clean_description) > 10000:
         errors["description"] = "Описание должно содержать не более 10000 символов."
     if errors:

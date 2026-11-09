@@ -202,10 +202,19 @@ def test_creation_rejects_missing_invalid_and_other_session_csrf(client):
         (" \t\n", " \n\t", {"location", "description"}),
         ("я" * 256, "Описание", {"location"}),
         ("Место", "я" * 10001, {"description"}),
+        ("\x00", "Описание", {"location"}),
+        ("\x00Место", "Описание", {"location"}),
+        ("Ме\x00сто", "Описание", {"location"}),
+        ("Место\x00", "Описание", {"location"}),
+        ("Место", "\x00", {"description"}),
+        ("Место", "\x00Описание", {"description"}),
+        ("Место", "Опи\x00сание", {"description"}),
+        ("Место", "Описание\x00", {"description"}),
+        ("Место\x00", "Описание\x00", {"location", "description"}),
     ],
 )
 def test_invalid_form_preserves_values_and_does_not_save(
-    client, location, description, error_fields
+    client, reject_nul_sql_parameters, location, description, error_fields
 ):
     c, factory = client
     token = sign_in(c, factory)
@@ -219,6 +228,9 @@ def test_invalid_form_preserves_values_and_does_not_save(
     assert set(response.context["errors"]) == error_fields
     for message in response.context["errors"].values():
         assert message in response.text
+    for field, value in (("location", location), ("description", description)):
+        if "\x00" in value:
+            assert "нулевой символ" in response.context["errors"][field]
     assert csrf(response) == token
     assert draft_count(factory) == 0
 

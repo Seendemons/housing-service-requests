@@ -82,6 +82,30 @@ def test_login_failures_and_csrf(client):
     assert "set-cookie" not in repeated.headers
 
 
+@pytest.mark.parametrize("name", ["\x00", "\x00alice", "al\x00ice", "alice\x00"])
+def test_login_rejects_nul_before_database_query(
+    client, reject_nul_sql_parameters, name
+):
+    c, factory = client
+    page = c.get("/login")
+    token = csrf(page)
+    old_session = c.cookies["session"]
+    response = c.post(
+        "/login",
+        data={"csrf_token": token, "login": name, "password": "test-password"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 401
+    assert "Неверный логин или пароль" in response.text
+    assert csrf(response) == token
+    assert c.cookies["session"] == old_session
+    with factory() as db:
+        sessions = db.scalars(select(AuthSession)).all()
+        assert len(sessions) == 1
+        assert sessions[0].user_id is None
+        assert sorted(db.scalars(select(User.login))) == ["alice", "bad", "bob"]
+
+
 @pytest.mark.parametrize(
     "name, route, other",
     [("alice", "/resident", "/dispatcher"), ("bob", "/dispatcher", "/resident")],
