@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Карточка черновика — Жилищная служба{% endblock %}
+{% block title %}Карточка заявки — Жилищная служба{% endblock %}
 
 {% block content %}
 <div class="draft-page">
@@ -15,9 +15,12 @@
         </div>
     </header>
     <main class="draft-panel">
-        <h1>Черновик № {{ service_request.id }}</h1>
-        <p class="draft-status">Черновик</p>
+        <h1>{% if service_request.status.value == 'draft' %}Черновик{% else %}Заявка{% endif %} № {{ service_request.id }}</h1>
+        <p class="draft-status">{{ status_labels[service_request.status] }}</p>
+        {% if service_request.status.value == 'draft' %}
         <p class="draft-note">Сохранён в вашем кабинете. Ещё не передан диспетчеру.</p>
+        <p class="draft-note" id="submit-help">Отправка передаст заявку диспетчеру. После отправки редактирование недоступно. Пока проверка ИИ не подключена, отправка выполняется вручную.</p>
+        {% endif %}
         <dl class="draft-details">
             <dt>Местоположение</dt>
             <dd>{{ service_request.location }}</dd>
@@ -26,9 +29,29 @@
             <dt>Дата создания (UTC)</dt>
             <dd>{{ service_request.created_at.strftime('%d.%m.%Y %H:%M') }} UTC</dd>
         </dl>
+        <h2>История заявки</h2>
+        {% if history %}
+        <ol class="draft-history">
+            {% for entry in history %}
+            <li>
+                <p>{{ entry.created_at.strftime('%d.%m.%Y %H:%M') }} UTC · {{ entry.actor.login }}</p>
+                <p>{% if entry.previous_status %}{{ status_labels[entry.previous_status] }} → {% endif %}{{ status_labels[entry.new_status] }}</p>
+                {% if entry.comment %}<p class="draft-description">{{ entry.comment }}</p>{% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+        {% else %}
+        <p>История пока пуста.</p>
+        {% endif %}
         <div class="draft-actions">
+            {% if service_request.status.value == 'draft' %}
             <a class="draft-button" href="/resident/requests/{{ service_request.id }}/edit">Редактировать</a>
-            <a href="/resident">К списку черновиков</a>
+            <form method="post" action="/resident/requests/{{ service_request.id }}/submit" aria-describedby="submit-help">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="draft-button" type="submit">Отправить диспетчеру</button>
+            </form>
+            {% endif %}
+            <a href="/resident">К списку заявок</a>
         </div>
     </main>
 </div>

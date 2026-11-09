@@ -15,20 +15,20 @@
         </div>
     </header>
     <main class="draft-panel">
-        <h1>Мои черновики</h1>
-        <p class="draft-note">Здесь сохранены ваши черновики. Они ещё не переданы диспетчеру.</p>
+        <h1>Мои заявки</h1>
+        <p class="draft-note">Здесь ваши черновики и отправленные заявки. Откройте карточку, чтобы посмотреть историю.</p>
         <a class="draft-button" href="/resident/requests/new">Создать черновик</a>
-        {% if drafts %}
+        {% if service_requests %}
         <ul class="draft-list">
-            {% for draft in drafts %}
+            {% for item in service_requests %}
             <li>
-                <a href="/resident/requests/{{ draft.id }}">Черновик № {{ draft.id }} — {{ draft.location }}</a>
-                <span class="draft-status">Черновик</span>
+                <a href="/resident/requests/{{ item.id }}">{% if item.status.value == 'draft' %}Черновик{% else %}Заявка{% endif %} № {{ item.id }} — {{ item.location }}</a>
+                <span class="draft-status">{{ status_labels[item.status] }}</span>
             </li>
             {% endfor %}
         </ul>
         {% else %}
-        <p class="draft-empty">У вас пока нет черновиков. Создайте первый, чтобы описать проблему в доме.</p>
+        <p class="draft-empty">У вас пока нет заявок. Создайте черновик, чтобы описать проблему в доме.</p>
         {% endif %}
         <p><a href="/">На главную</a></p>
     </main>

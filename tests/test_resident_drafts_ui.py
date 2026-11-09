@@ -61,7 +61,7 @@ def render(name, *, status_code=200, **context):
         context={
             "user": User(id=7, login="resident<test>", role=Role.RESIDENT),
             "csrf_token": "test-token",
-            "drafts": [],
+            "service_requests": [],
             "location": "",
             "description": "",
             "errors": {},
@@ -98,18 +98,18 @@ def test_draft_pages_account_logout_and_local_styles(
 def test_empty_list_links_to_creation():
     page = Page(render("resident.html").body.decode())
     assert page.find("a", href="/resident/requests/new")
-    assert "У вас пока нет черновиков." in "".join(page.text)
+    assert "У вас пока нет заявок." in "".join(page.text)
     assert not page.find("li")
 
 
 def test_list_preserves_provided_order_and_escapes_locations(draft):
     newer = ServiceRequest(id=43, location="Лифт", status=RequestStatus.DRAFT)
-    page = Page(render("resident.html", drafts=[newer, draft]).body.decode())
+    page = Page(render("resident.html", service_requests=[newer, draft]).body.decode())
     links = [a["href"] for a in page.find("a")]
     assert links.index("/resident/requests/43") < links.index("/resident/requests/42")
     assert draft.location in "".join(page.text)
     assert not page.find("script")
-    assert "У вас пока нет черновиков." not in "".join(page.text)
+    assert "У вас пока нет заявок." not in "".join(page.text)
 
 
 def test_creation_form_has_contract_fields_and_accessible_labels():
@@ -173,6 +173,30 @@ def test_detail_renders_model_content_safely_with_creation_time(draft):
     assert page.find("a", href="/resident")
     assert "Ещё не передан диспетчеру" in text
     assert page.find("a", href="/resident/requests/42/edit")
+    assert page.find("form", method="post", action="/resident/requests/42/submit")
+    assert "Отправить диспетчеру" in page.text
+    assert "История пока пуста." in text
+    assert "После отправки редактирование недоступно" in text
+
+
+@pytest.mark.parametrize(
+    "status,label",
+    [
+        (RequestStatus.NEW, "Новая"),
+        (RequestStatus.IN_PROGRESS, "В работе"),
+        (RequestStatus.CLOSED, "Закрыта"),
+    ],
+)
+def test_sent_card_and_list_show_status_without_draft_actions(draft, status, label):
+    draft.status = status
+    for name in ("request_detail.html", "resident.html"):
+        page = Page(
+            render(name, service_request=draft, service_requests=[draft]).body.decode()
+        )
+        text = "".join(page.text)
+        assert label in text and "Заявка № 42" in text
+        assert not page.find("a", href="/resident/requests/42/edit")
+        assert not page.find("form", action="/resident/requests/42/submit")
 
 
 def test_edit_form_has_current_values_save_and_cancel(draft):

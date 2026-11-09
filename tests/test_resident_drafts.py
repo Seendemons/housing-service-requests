@@ -4,14 +4,22 @@ from html import escape
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth import create_session, digest
 from app.database import get_db
 from app.main import app
-from app.models import AuthSession, Base, RequestStatus, Role, ServiceRequest, User
+from app.models import (
+    AuthSession,
+    Base,
+    RequestHistory,
+    RequestStatus,
+    Role,
+    ServiceRequest,
+    User,
+)
 
 
 @pytest.fixture
@@ -130,7 +138,7 @@ def test_empty_list_and_form_get_do_not_create_requests(client):
     token = sign_in(c, factory)
     page = c.get("/resident")
     assert page.status_code == 200
-    assert page.context["drafts"] == []
+    assert page.context["service_requests"] == []
     assert "/resident/requests/new" in page.text
     for _ in range(2):
         form = c.get("/resident/requests/new")
@@ -141,7 +149,7 @@ def test_empty_list_and_form_get_do_not_create_requests(client):
     assert draft_count(factory) == 0
 
 
-def test_list_only_own_drafts_newest_first_and_detail_access(client):
+def test_list_own_requests_all_statuses_newest_first_and_detail_access(client):
     c, factory = client
     sign_in(c, factory)
     earlier = datetime(2026, 1, 1, tzinfo=UTC)
@@ -168,13 +176,13 @@ def test_list_only_own_drafts_newest_first_and_detail_access(client):
             )
     page = c.get("/resident")
     assert page.status_code == 200
-    assert [row.id for row in page.context["drafts"]] == [3, 2, 1]
+    assert [row.id for row in page.context["service_requests"]] == [7, 6, 5, 3, 2, 1]
     assert page.text.index("Место 3") < page.text.index("Место 2")
     assert page.text.index("Место 2") < page.text.index("Место 1")
-    for row_id in (1, 2, 3):
+    for row_id in (1, 2, 3, 5, 6, 7):
         assert f"/resident/requests/{row_id}" in page.text
         assert c.get(f"/resident/requests/{row_id}").status_code == 200
-    for row_id in (4, 5, 6, 7, 999):
+    for row_id in (4, 999):
         assert f"Место {row_id}" not in page.text
         assert c.get(f"/resident/requests/{row_id}").status_code == 404
 
@@ -202,6 +210,7 @@ def test_all_routes_require_active_resident_session(client, draft_id, identity):
         ("POST", "/resident/requests"),
         ("GET", f"/resident/requests/{draft_id}/edit"),
         ("POST", f"/resident/requests/{draft_id}/edit"),
+        ("POST", f"/resident/requests/{draft_id}/submit"),
     ]:
         response = c.request(
             method,
@@ -469,3 +478,222 @@ def test_edited_html_is_escaped_in_form_card_and_list(client, draft_id):
     with factory() as db:
         row = db.get(ServiceRequest, draft_id)
         assert row.location == location and row.description == description
+
+
+def test_submit_persists_status_and_history_and_prevents_editing(client, draft_id):
+    c, factory = client
+    token = sign_in(c, factory)
+    before = draft_snapshot(factory, draft_id)
+    url = f"/resident/requests/{draft_id}"
+    assert "История пока пуста" in c.get(url).text
+    response = c.post(
+        f"{url}/submit",
+        data={
+            "csrf_token": token,
+            "resident_id": "2",
+            "actor_id": "3",
+            "status": "closed",
+            "location": "Подмена",
+            "description": "Подмена",
+            "comment": "Подмена",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == url
+    after = draft_snapshot(factory, draft_id)
+    assert after[0] == before[0]
+    assert after[1] == RequestStatus.NEW
+    assert after[2:5] == before[2:5]
+    assert after[5] > before[5]
+    assert after[6:] == before[6:]
+    with factory() as db:
+        entry = db.scalar(select(RequestHistory))
+        assert entry.request_id == draft_id
+        assert entry.actor_id == 1
+        assert entry.previous_status == RequestStatus.DRAFT
+        assert entry.new_status == RequestStatus.NEW
+        assert entry.created_at == after[5]
+        assert entry.comment is None
+        history_id = entry.id
+    # Новый вход подтверждает, что карточка читается из сохранённых данных.
+    token = sign_in(c, factory)
+    page = c.get(url)
+    assert page.status_code == 200
+    assert "Новая" in page.text and "Черновик → Новая" in page.text
+    assert "alice" in page.text and "UTC" in page.text
+    assert [entry.id for entry in page.context["history"]] == [history_id]
+    assert f"{url}/submit" not in page.text and f"{url}/edit" not in page.text
+    assert c.get(f"{url}/edit").status_code == 404
+    assert (
+        c.post(
+            f"{url}/edit",
+            data={"csrf_token": token, "location": "Другое", "description": "Другое"},
+        ).status_code
+        == 404
+    )
+    assert draft_snapshot(factory, draft_id) == after
+    listing = c.get("/resident")
+    assert "Новая" in listing.text and url in listing.text
+
+
+@pytest.mark.parametrize(
+    "status", [RequestStatus.NEW, RequestStatus.IN_PROGRESS, RequestStatus.CLOSED]
+)
+def test_repeated_submit_does_not_duplicate_history_or_reset_status(
+    client, draft_id, status
+):
+    c, factory = client
+    token = sign_in(c, factory)
+    url = f"/resident/requests/{draft_id}/submit"
+    assert c.post(url, data={"csrf_token": token}).status_code == 200
+    with factory.begin() as db:
+        db.get(ServiceRequest, draft_id).status = status
+    before = draft_snapshot(factory, draft_id)
+    for _ in range(2):
+        response = c.post(url, data={"csrf_token": token}, follow_redirects=False)
+        assert response.status_code == 303
+    assert draft_snapshot(factory, draft_id) == before
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(RequestHistory)) == 1
+
+
+def test_submit_between_edit_read_and_save_prevents_text_changes(
+    client, draft_id, monkeypatch
+):
+    c, factory = client
+    token = sign_in(c, factory)
+    before = draft_snapshot(factory, draft_id)
+    url = f"/resident/requests/{draft_id}"
+    with TestClient(app) as other:
+        other_token = sign_in(other, factory)
+
+        def submit_before_validation(location, description):
+            assert (
+                other.post(
+                    f"{url}/submit", data={"csrf_token": other_token}
+                ).status_code
+                == 200
+            )
+            return {}
+
+        monkeypatch.setattr("app.main.draft_form_errors", submit_before_validation)
+        response = c.post(
+            f"{url}/edit",
+            data={"csrf_token": token, "location": "Подмена", "description": "Подмена"},
+        )
+    assert response.status_code == 404
+    after = draft_snapshot(factory, draft_id)
+    assert after[1] == RequestStatus.NEW
+    assert after[2:5] == before[2:5]
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(RequestHistory)) == 1
+
+
+def test_submit_rejects_foreign_missing_and_invalid_csrf(client, draft_id):
+    c, factory = client
+    own_token = sign_in(c, factory)
+    url = f"/resident/requests/{draft_id}/submit"
+    before = draft_snapshot(factory, draft_id)
+    other_token = sign_in(c, factory, 2)
+    for request_id in (draft_id, 999):
+        response = c.post(
+            f"/resident/requests/{request_id}/submit", data={"csrf_token": other_token}
+        )
+        assert response.status_code == 404
+        assert before[2] not in response.text and before[3] not in response.text
+    own_token = sign_in(c, factory)
+    for invalid in (None, "", "invalid", "ä" * 43, other_token):
+        data = {} if invalid is None else {"csrf_token": invalid}
+        assert c.post(url, data=data).status_code == 403
+    # GET не отправляет заявку, действующий токен не меняется.
+    assert c.get(url).status_code == 405
+    assert csrf(c.get(f"/resident/requests/{draft_id}")) == own_token
+    assert draft_snapshot(factory, draft_id) == before
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(RequestHistory)) == 0
+
+
+@pytest.mark.parametrize("failure_point", ["before_insert", "after_insert"])
+def test_submit_rolls_back_status_and_history_on_write_failure(
+    client, draft_id, monkeypatch, failure_point
+):
+    c, factory = client
+    token = sign_in(c, factory)
+    before = draft_snapshot(factory, draft_id)
+    # Проверяем обработчик вместе с настоящей зависимостью get_db и её rollback.
+    app.dependency_overrides.pop(get_db)
+    monkeypatch.setattr("app.database.get_session_factory", lambda: factory)
+
+    def fail(mapper, connection, target):
+        assert (
+            connection.scalar(
+                select(ServiceRequest.status).where(ServiceRequest.id == draft_id)
+            )
+            == RequestStatus.NEW
+        )
+        raise RuntimeError("history write failed")
+
+    event.listen(RequestHistory, failure_point, fail)
+    try:
+        with pytest.raises(RuntimeError, match="history write failed"):
+            c.post(f"/resident/requests/{draft_id}/submit", data={"csrf_token": token})
+    finally:
+        event.remove(RequestHistory, failure_point, fail)
+    assert draft_snapshot(factory, draft_id) == before
+    with factory() as db:
+        assert db.scalar(select(func.count()).select_from(RequestHistory)) == 0
+    assert (
+        c.post(
+            f"/resident/requests/{draft_id}/submit", data={"csrf_token": token}
+        ).status_code
+        == 200
+    )
+
+
+def test_history_is_ordered_escaped_and_visible_only_to_owner(client, draft_id):
+    c, factory = client
+    sign_in(c, factory)
+    earlier = datetime(2026, 11, 1, tzinfo=UTC)
+    later = earlier + timedelta(hours=1)
+    with factory.begin() as db:
+        db.get(ServiceRequest, draft_id).status = RequestStatus.CLOSED
+        db.get(User, 3).login = "<script>dispatcher</script>"
+        for entry_id, previous, new, created, actor, comment in [
+            (
+                3,
+                RequestStatus.IN_PROGRESS,
+                RequestStatus.CLOSED,
+                later,
+                3,
+                "<script>Итог</script>\nГотово",
+            ),
+            (2, RequestStatus.NEW, RequestStatus.IN_PROGRESS, later, 3, None),
+            (1, RequestStatus.DRAFT, RequestStatus.NEW, earlier, 1, None),
+        ]:
+            db.add(
+                RequestHistory(
+                    id=entry_id,
+                    request_id=draft_id,
+                    actor_id=actor,
+                    previous_status=previous,
+                    new_status=new,
+                    created_at=created,
+                    comment=comment,
+                )
+            )
+    page = c.get(f"/resident/requests/{draft_id}")
+    assert page.status_code == 200
+    assert [entry.id for entry in page.context["history"]] == [1, 2, 3]
+    assert "01.11.2026 01:00 UTC" in page.text
+    assert "Черновик → Новая" in page.text
+    assert "Новая → В работе" in page.text
+    assert "В работе → Закрыта" in page.text
+    assert "&lt;script&gt;Итог&lt;/script&gt;\nГотово" in page.text
+    assert "&lt;script&gt;dispatcher&lt;/script&gt;" in page.text
+    assert "<script>" not in page.text
+    for identity, expected in [(2, 404), (3, 403)]:
+        sign_in(c, factory, identity)
+        denied = c.get(f"/resident/requests/{draft_id}")
+        assert denied.status_code == expected
+        assert "Итог" not in denied.text
