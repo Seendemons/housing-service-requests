@@ -3,11 +3,12 @@
 {% block title %}Карточка заявки — Жилищная служба{% endblock %}
 
 {% block content %}
+{% set is_dispatcher = user.role.value == 'dispatcher' %}
 <div class="draft-page">
     <header class="draft-header">
         <a class="draft-brand" href="/">Жилищная служба</a>
         <div class="draft-account">
-            <p>Логин: {{ user.login }} · Роль: житель</p>
+            <p>Логин: {{ user.login }} · Роль: {% if is_dispatcher %}диспетчер{% else %}житель{% endif %}</p>
             <form method="post" action="/logout">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button class="draft-logout" type="submit">Выйти</button>
@@ -22,6 +23,10 @@
         <p class="draft-note" id="submit-help">Отправка передаст заявку диспетчеру. После отправки редактирование недоступно. Пока проверка ИИ не подключена, отправка выполняется вручную.</p>
         {% endif %}
         <dl class="draft-details">
+            {% if is_dispatcher %}
+            <dt>Житель</dt>
+            <dd>{{ service_request.resident.login }}</dd>
+            {% endif %}
             <dt>Местоположение</dt>
             <dd>{{ service_request.location }}</dd>
             <dt>Описание проблемы</dt>
@@ -51,7 +56,7 @@
                 <button class="draft-button" type="submit">Отправить диспетчеру</button>
             </form>
             {% endif %}
-            <a href="/resident">К списку заявок</a>
+            <a href="/{% if is_dispatcher %}dispatcher{% else %}resident{% endif %}">К списку заявок</a>
         </div>
     </main>
 </div>

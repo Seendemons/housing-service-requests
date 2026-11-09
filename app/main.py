@@ -41,6 +41,11 @@ templates.env.globals["status_labels"] = {
     RequestStatus.CLOSED: "Закрыта",
 }
 DB = Annotated[Session, Depends(get_db)]
+DISPATCHER_STATUSES = (
+    RequestStatus.NEW,
+    RequestStatus.IN_PROGRESS,
+    RequestStatus.CLOSED,
+)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -119,18 +124,6 @@ def logout(request: Request, db: DB, csrf_token: Annotated[str, Form()] = ""):
         samesite="lax",
     )
     return response
-
-
-def account(request: Request, db: Session, role: Role):
-    session = get_session(request, db)
-    user = require_role(session, role)
-    if user is None:
-        return RedirectResponse("/login", status_code=303)
-    return templates.TemplateResponse(
-        request=request,
-        name="account.html",
-        context={"user": user, "csrf_token": session.csrf_token},
-    )
 
 
 @app.get("/resident")
@@ -256,6 +249,17 @@ def get_own_request(db: Session, request_id: int, resident_id: int) -> ServiceRe
     return service_request
 
 
+def request_history(db: Session, request_id: int) -> list[RequestHistory]:
+    return list(
+        db.scalars(
+            select(RequestHistory)
+            .where(RequestHistory.request_id == request_id)
+            .options(joinedload(RequestHistory.actor))
+            .order_by(RequestHistory.created_at, RequestHistory.id)
+        )
+    )
+
+
 @app.get("/resident/requests/{request_id}")
 def request_detail(request: Request, request_id: int, db: DB):
     session = get_session(request, db)
@@ -263,12 +267,6 @@ def request_detail(request: Request, request_id: int, db: DB):
     if user is None:
         return RedirectResponse("/login", status_code=303)
     service_request = get_own_request(db, request_id, user.id)
-    history = db.scalars(
-        select(RequestHistory)
-        .where(RequestHistory.request_id == service_request.id)
-        .options(joinedload(RequestHistory.actor))
-        .order_by(RequestHistory.created_at, RequestHistory.id)
-    ).all()
     return templates.TemplateResponse(
         request=request,
         name="request_detail.html",
@@ -276,7 +274,7 @@ def request_detail(request: Request, request_id: int, db: DB):
             "user": user,
             "csrf_token": session.csrf_token,
             "service_request": service_request,
-            "history": history,
+            "history": request_history(db, service_request.id),
         },
     )
 
@@ -395,5 +393,55 @@ def submit_request(
 
 
 @app.get("/dispatcher")
-def dispatcher(request: Request, db: DB):
-    return account(request, db, Role.DISPATCHER)
+def dispatcher(request: Request, db: DB, status: str = ""):
+    session = get_session(request, db)
+    user = require_role(session, Role.DISPATCHER)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    if status and status not in DISPATCHER_STATUSES:
+        raise HTTPException(status_code=422, detail="Недопустимый фильтр статуса")
+    query = select(ServiceRequest).where(ServiceRequest.status.in_(DISPATCHER_STATUSES))
+    if status:
+        query = query.where(ServiceRequest.status == RequestStatus(status))
+    service_requests = db.scalars(
+        query.order_by(ServiceRequest.created_at.desc(), ServiceRequest.id.desc())
+    ).all()
+    return templates.TemplateResponse(
+        request=request,
+        name="dispatcher.html",
+        context={
+            "user": user,
+            "csrf_token": session.csrf_token,
+            "service_requests": service_requests,
+            "selected_status": status,
+            "status_options": DISPATCHER_STATUSES,
+        },
+    )
+
+
+@app.get("/dispatcher/requests/{request_id}")
+def dispatcher_request_detail(request: Request, request_id: int, db: DB):
+    session = get_session(request, db)
+    user = require_role(session, Role.DISPATCHER)
+    if user is None:
+        return RedirectResponse("/login", status_code=303)
+    service_request = db.scalar(
+        select(ServiceRequest)
+        .where(
+            ServiceRequest.id == request_id,
+            ServiceRequest.status.in_(DISPATCHER_STATUSES),
+        )
+        .options(joinedload(ServiceRequest.resident))
+    )
+    if service_request is None:
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
+    return templates.TemplateResponse(
+        request=request,
+        name="request_detail.html",
+        context={
+            "user": user,
+            "csrf_token": session.csrf_token,
+            "service_request": service_request,
+            "history": request_history(db, service_request.id),
+        },
+    )

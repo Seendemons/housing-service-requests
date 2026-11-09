@@ -359,7 +359,7 @@ input {
     }
 }
 
-/* Черновики жителя: стили ограничены собственным контейнером. */
+/* Кабинеты и заявки: стили ограничены собственным контейнером. */
 .draft-page {
     max-width: 1000px;
     margin: 0 auto;
@@ -543,6 +543,25 @@ input {
 
 .draft-page .draft-description {
     white-space: pre-wrap;
+}
+
+.draft-page .request-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.draft-page .request-filter select {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 48px;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--color-text);
+    font: inherit;
 }
 
 @media (max-width: 480px) {
