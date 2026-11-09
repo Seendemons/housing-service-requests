@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Path as PathParameter
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -42,6 +43,8 @@ templates.env.globals["status_labels"] = {
     RequestStatus.CLOSED: "Закрыта",
 }
 DB = Annotated[Session, Depends(get_db)]
+# Номер заявки должен помещаться в положительный INTEGER PostgreSQL до SQL.
+RequestID = Annotated[int, PathParameter(ge=1, le=2147483647)]
 DISPATCHER_STATUSES = (
     RequestStatus.NEW,
     RequestStatus.IN_PROGRESS,
@@ -262,7 +265,7 @@ def request_history(db: Session, request_id: int) -> list[RequestHistory]:
 
 
 @app.get("/resident/requests/{request_id}")
-def request_detail(request: Request, request_id: int, db: DB):
+def request_detail(request: Request, request_id: RequestID, db: DB):
     session = get_session(request, db)
     user = require_role(session, Role.RESIDENT)
     if user is None:
@@ -281,7 +284,7 @@ def request_detail(request: Request, request_id: int, db: DB):
 
 
 @app.get("/resident/requests/{request_id}/edit")
-def edit_request_page(request: Request, request_id: int, db: DB):
+def edit_request_page(request: Request, request_id: RequestID, db: DB):
     session = get_session(request, db)
     user = require_role(session, Role.RESIDENT)
     if user is None:
@@ -304,7 +307,7 @@ def edit_request_page(request: Request, request_id: int, db: DB):
 @app.post("/resident/requests/{request_id}/edit")
 def edit_request(
     request: Request,
-    request_id: int,
+    request_id: RequestID,
     db: DB,
     csrf_token: Annotated[str, Form()] = "",
     location: Annotated[str, Form()] = "",
@@ -356,7 +359,7 @@ def edit_request(
 @app.post("/resident/requests/{request_id}/submit")
 def submit_request(
     request: Request,
-    request_id: int,
+    request_id: RequestID,
     db: DB,
     csrf_token: Annotated[str, Form()] = "",
 ):
@@ -421,7 +424,7 @@ def dispatcher(request: Request, db: DB, status: str = ""):
 
 
 @app.get("/dispatcher/requests/{request_id}")
-def dispatcher_request_detail(request: Request, request_id: int, db: DB):
+def dispatcher_request_detail(request: Request, request_id: RequestID, db: DB):
     session = get_session(request, db)
     user = require_role(session, Role.DISPATCHER)
     if user is None:
@@ -476,7 +479,7 @@ def dispatcher_detail_response(
 @app.post("/dispatcher/requests/{request_id}/start")
 def start_request(
     request: Request,
-    request_id: int,
+    request_id: RequestID,
     db: DB,
     csrf_token: Annotated[str, Form()] = "",
     executor_id: Annotated[str, Form()] = "",
